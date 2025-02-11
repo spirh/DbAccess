@@ -19,7 +19,7 @@ public abstract class DbBasicDefinition<T> : DbDefinition
         var columnDef = new ColumnDefinition()
         {
             Name = ExtractPropertyInfo(column as Expression<Func<T, object>>).Name,
-            Type = ExtractPropertyInfo(column as Expression<Func<T, object>>).PropertyType,
+            Property = ExtractPropertyInfo(column as Expression<Func<T, object>>),
             DefaultValue = defaultValue,
             IsNullabe = nullable,
             Length = length

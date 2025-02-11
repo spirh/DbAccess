@@ -42,6 +42,7 @@ public class GenericFilterBuilder<T> : IEnumerable<GenericFilter>
         return GetEnumerator();
     }
 }
+
 /// <summary>
 /// Generic Filter
 /// </summary>
