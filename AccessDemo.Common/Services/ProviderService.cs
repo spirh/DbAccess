@@ -8,9 +8,9 @@ using Npgsql;
 
 namespace AccessDemo.Common.Services;
 
-public class ResourceService : ExtendedRepository<Resource, ExtResource>, IResourceService
+public class ProviderService : BasicRepository<Provider>, IProviderService
 {
-    public ResourceService(IOptions<DbAccessConfig> options, NpgsqlDataSource connection, IDbConverter dbConverter) : base(options, connection, dbConverter)
+    public ProviderService(IOptions<DbAccessConfig> options, NpgsqlDataSource connection, IDbConverter dbConverter) : base(options, connection, dbConverter)
     {
     }
 }

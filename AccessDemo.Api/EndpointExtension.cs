@@ -8,28 +8,6 @@ using System.Reflection;
 namespace AccessDemo.Api;
 
 
-public static class ServiceCollectionExtensions
-{
-    public static IServiceCollection AddDbRepositories(this IServiceCollection services, string assemblyName)
-    {
-        var targetAssembly = Assembly.Load(assemblyName);
-        var repositoryTypes = targetAssembly
-            .GetTypes()
-            .Where(t => !t.IsInterface && !t.IsAbstract)
-            .Where(t => t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDbBasicRepository<>)));
-
-        foreach (var repoType in repositoryTypes)
-        {
-            var interfaceType = repoType.GetInterfaces()
-                .First(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDbBasicRepository<>));
-
-            services.AddScoped(interfaceType, repoType);
-        }
-
-        return services;
-    }
-}
-
 /// <summary>
 /// Api Endpoint extension for DbAccess services
 /// </summary>
@@ -42,11 +20,11 @@ public static class EndpointExtension
     /// <returns></returns>
     public static WebApplication MapDbAccessEndpoints(this WebApplication app)
     {
-        //app.MapDefaults<IProviderService, Provider>();
+        app.MapDefaults<IProviderService, Provider>();
         app.MapDefaultsExt<IAreaService, Area, ExtArea>();
-        //app.MapDefaultsExt<IPackageService, Package, ExtPackage>(mapSearch: true);
-        //app.MapCrossDefaults<IPackageResourceService, PackageResource, ExtPackageResource, Package, Resource>("","");
-        //app.MapDefaultsExt<IResourceService, Resource, ExtResource>();
+        app.MapDefaultsExt<IPackageService, Package, ExtPackage>(mapSearch: true);
+        app.MapDefaultsExt<IResourceService, Resource, ExtResource>();
+        app.MapCrossDefaults<IPackageResourceService, PackageResource, ExtPackageResource, Package, Resource>("packages","resources");
 
         return app;
     }
