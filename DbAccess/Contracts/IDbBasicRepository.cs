@@ -12,7 +12,7 @@ public interface IDbBasicRepository<T>
 
     Task<int> Ingest(List<T> data, CancellationToken cancellationToken = default);
 
-    Task<int> Insert(T entity, CancellationToken cancellationToken = default);
+    Task<int> Create(T entity, CancellationToken cancellationToken = default);
 
     Task<int> Upsert(Guid id, T entity, CancellationToken cancellationToken = default);
 
@@ -24,5 +24,5 @@ public interface IDbBasicRepository<T>
     Task<int> CreateTranslation(T obj, string language, CancellationToken cancellationToken = default);
     Task<int> UpdateTranslation(Guid id, T obj, string language, CancellationToken cancellationToken = default);
 
-    void Define();
+    //void Define();
 }

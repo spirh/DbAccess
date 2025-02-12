@@ -10,6 +10,8 @@ public class ForeignKeyDefinition
     public string RefProperty { get; set; } //Id
     public string ExtendedProperty { get; set; } //User
 
+    public List<GenericFilter> Filters { get; set; } // Check that Value Property exists ...
+
     public bool IsList { get; set; }
     public bool IsOptional { get; set; }
     public bool UseCascadeDelete { get; set; }

@@ -2,13 +2,130 @@
 using System.Data;
 using System.Reflection;
 using System.Text.Json;
+using DbAccess.Contracts;
+using FastMember;
 
 namespace DbAccess.Helpers;
 
 /// <summary>
 /// DbConverter
 /// </summary>
-public sealed class DbConverter
+public sealed class NewDbConverter : IDbConverter
+{
+    private static readonly Lazy<NewDbConverter> _instance = new(() => new NewDbConverter());
+
+    public static NewDbConverter Instance => _instance.Value;
+
+    private static readonly ConcurrentDictionary<Type, TypeAccessor> AccessorCache = new();
+    private static readonly ConcurrentDictionary<Type, Dictionary<string, (Member Member, Type? ElementType)>> PropertyCache = new();
+
+    private static TypeAccessor GetAccessor(Type type) => AccessorCache.GetOrAdd(type, TypeAccessor.Create);
+
+    private static Dictionary<string, (Member Member, Type? ElementType)> GetProperties(Type type)
+    {
+        return PropertyCache.GetOrAdd(type, t =>
+        {
+            var accessor = GetAccessor(t);
+            return accessor.GetMembers().ToDictionary(
+                m => m.Name.ToLower(),
+                m => (m, GetListOrEnumerableElementType(m.Type))
+            );
+        });
+    }
+
+    public List<T> ConvertToObjects<T>(IDataReader reader) where T : new()
+    {
+        var accessor = GetAccessor(typeof(T));
+        var properties = GetProperties(typeof(T));
+        var results = new List<T>();
+
+        while (reader.Read())
+        {
+            var instance = new T();
+            var subObjectCache = new Dictionary<string, object>();
+
+            for (int i = 0; i < reader.FieldCount; i++)
+            {
+                string columnName = reader.GetName(i).ToLower();
+                if (!properties.TryGetValue(columnName, out var prop)) continue;
+
+                object? value = reader.IsDBNull(i) ? null : reader.GetValue(i);
+
+                if (value != null)
+                {
+                    if (prop.ElementType != null)
+                    {
+                        // Håndter lister (List<T> eller IEnumerable<T>)
+                        //var listValue = JsonSerializer.Deserialize(value.ToString() ?? "[]", prop.Member.Type);
+                        //Console.WriteLine($"JSON to deserialize: {value}");
+                        Console.WriteLine($"Deserializing {value} into {prop.ElementType}");
+                        
+                        //var listValue = JsonSerializer.Deserialize(value?.ToString() ?? "[]", typeof(List<>).MakeGenericType(prop.ElementType));
+
+                        var listType = typeof(List<T>).MakeGenericType(prop.ElementType);
+                        var listValue = JsonSerializer.Deserialize(value?.ToString() ?? "[]", listType) as IList<T>;
+                        if (listValue != null)
+                        {
+                            accessor[instance, prop.Member.Name] = listValue;
+                        }
+
+                        Console.WriteLine($"Setting {prop.Member.Name} to {value}");
+                        accessor[instance, prop.Member.Name] = listValue;
+                    }
+                    else if (prop.Member.Type.IsClass && prop.Member.Type != typeof(string))
+                    {
+                        // Håndter underobjekter (rekursivt)
+                        string prefix = columnName + "_";
+                        object? subObject = subObjectCache.GetValueOrDefault(prefix) ?? Activator.CreateInstance(prop.Member.Type);
+
+                        var subProperties = GetProperties(prop.Member.Type);
+
+                        foreach (var subProp in subProperties)
+                        {
+                            string subColumn = prefix + subProp.Key;
+                            if (reader.GetOrdinal(subColumn) >= 0 && !reader.IsDBNull(reader.GetOrdinal(subColumn)))
+                            {
+                                object? subValue = reader.GetValue(reader.GetOrdinal(subColumn));
+                                if (subValue != null)
+                                {
+                                    GetAccessor(prop.Member.Type)[subObject!, subProp.Value.Member.Name] = Convert.ChangeType(subValue, subProp.Value.Member.Type);
+                                }
+                            }
+                        }
+
+                        subObjectCache[prefix] = subObject!;
+                        accessor[instance, prop.Member.Name] = subObject;
+                    }
+                    else
+                    {
+                        // Normal mapping av enkeltverdi
+                        accessor[instance, prop.Member.Name] = Convert.ChangeType(value, prop.Member.Type);
+                    }
+                }
+            }
+
+            results.Add(instance);
+        }
+
+        return results;
+    }
+
+    private static Type? GetListOrEnumerableElementType(Type type)
+    {
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>))
+            return type.GetGenericArguments()[0];
+
+        if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(IEnumerable<>))
+            return type.GetGenericArguments()[0];
+
+        return null;
+    }
+}
+
+/// <summary>
+/// DbConverter
+/// </summary>
+public sealed class DbConverter : IDbConverter
 {
     private static readonly Lazy<DbConverter> _instance = new(() => new DbConverter());
 

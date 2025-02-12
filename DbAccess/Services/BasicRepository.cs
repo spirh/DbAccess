@@ -1,9 +1,6 @@
 ﻿using System.Data;
 using System.Reflection;
 using System.Text;
-using System.Threading;
-using System.Xml.Linq;
-using Dapper;
 using DbAccess.Contracts;
 using DbAccess.Helpers;
 using DbAccess.Models;
@@ -15,26 +12,21 @@ namespace DbAccess.Services;
 public abstract class BasicRepository<T> : IDbBasicRepository<T> 
     where T : class, new()
 {
-    private readonly DbAccessConfig config;
-    private readonly IDbConnection connection;
-    protected readonly DbConverter dbConverter;
+    protected readonly DbAccessConfig config;
+    protected readonly NpgsqlDataSource connection;
+    protected readonly IDbConverter dbConverter;
 
-    public BasicRepository(IOptions<DbAccessConfig> options, IDbConnection connection, DbConverter dbConverter)
+    public BasicRepository(IOptions<DbAccessConfig> options, NpgsqlDataSource connection, IDbConverter dbConverter)
     {
         this.config = options.Value;
         this.connection = connection ?? throw new ArgumentNullException(nameof(connection));
         this.dbConverter = dbConverter;
-        Define();
     }
 
-    protected DbBasicDefinition<T> Definition { get; set; }
-    public abstract void Define();
+    public DbDefinition Definition { get { return DefinitionStore.Definition<T>(); } }
     public GenericFilterBuilder<T> CreateFilterBuilder<T>() { return new GenericFilterBuilder<T>(); }
 
-
-
-
-
+    #region Read
     public async Task<IEnumerable<T>> Get(RequestOptions? options = null, CancellationToken cancellationToken = default)
     {
         return await Get(filters: new List<GenericFilter>(), options: options, cancellationToken: cancellationToken);
@@ -56,25 +48,13 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         var param = PrepareParameters(filters, options);
         return await ExecuteQuery(cmd, param, cancellationToken: cancellationToken);
     }
-
-
-
-
+    #endregion
 
     #region Write
-
-
-
-
     /// <inheritdoc/>
     public async Task<int> Ingest(List<T> data, CancellationToken cancellationToken = default)
     {
-        using var conn = (NpgsqlConnection)GetConnection();
-        if (conn.State != ConnectionState.Open) 
-        {
-            conn.Open();
-        }
-
+        using var conn = await connection.OpenConnectionAsync();
         var dt = new DataTable();
         var dataAdapter = new NpgsqlDataAdapter($"SELECT * FROM {GetPostgresDefinition(includeAlias: false)} LIMIT 10", conn);
         dataAdapter.Fill(dt);
@@ -108,14 +88,14 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Failed to write data in column '{c.Key}' for '{Definition.EntityType.Name}'. Trying to write null. " + ex.Message);
+                    Console.WriteLine($"Failed to write data in column '{c.Key}' for '{Definition.BaseType.Name}'. Trying to write null. " + ex.Message);
                     try
                     {
                         writer.WriteNull();
                     }
                     catch
                     {
-                        Console.WriteLine($"Failed to write null in column '{c.Key}' for '{Definition.EntityType.Name}'.");
+                        Console.WriteLine($"Failed to write null in column '{c.Key}' for '{Definition.BaseType.Name}'.");
                         throw;
                     }
                 }
@@ -137,49 +117,44 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
     }
 
     /// <inheritdoc/>
-    public async Task<int> Insert(T entity, CancellationToken cancellationToken = default)
+    public async Task<int> Create(T entity, CancellationToken cancellationToken = default)
     {
-        
-        var param = GetObjectAsSqlParameter(entity);
-        string query = $"INSERT INTO {GetPostgresDefinition(includeAlias: false)} ({InsertColumns([.. param.Keys])}) VALUES({InsertValues([.. param.Keys])})";
-        return await ExecuteCommand(query, [.. param.Values], cancellationToken: cancellationToken);
+        var param = GetObjectAsNpgsqlParameter(entity);
+        string query = $"INSERT INTO {GetPostgresDefinition(includeAlias: false)} ({InsertColumns(param)}) VALUES({InsertValues(param)})";
+        return await ExecuteCommand(query, [.. param], cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task<int> Upsert(Guid id, T entity, CancellationToken cancellationToken = default)
     {
         var sb = new StringBuilder();
-        var param = GetObjectAsSqlParameter(entity);
-        sb.AppendLine($"INSERT INTO {GetPostgresDefinition(includeAlias: false)} ({InsertColumns([.. param.Keys])}) VALUES({InsertValues([.. param.Keys])})");
+        var param = GetObjectAsNpgsqlParameter(entity);
+        sb.AppendLine($"INSERT INTO {GetPostgresDefinition(includeAlias: false)} ({InsertColumns(param)}) VALUES({InsertValues(param)})");
         sb.AppendLine(" ON CONFLICT (id) DO ");
-        sb.AppendLine($"UPDATE SET {UpdateSetStatement([.. param.Keys])}");
-        param.Add("_id", new NpgsqlParameter("_id", id));
-        return await ExecuteCommand(sb.ToString(), [.. param.Values], cancellationToken: cancellationToken);
+        sb.AppendLine($"UPDATE SET {UpdateSetStatement(param)}");
+        param.Add(new NpgsqlParameter("_id", id));
+        return await ExecuteCommand(sb.ToString(), [.. param], cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
     public async Task<int> Update(Guid id, T entity, CancellationToken cancellationToken = default)
     {
-        var param = GetObjectAsSqlParameter(entity);
-        string query = $"UPDATE {GetPostgresDefinition(includeAlias: false)} SET {UpdateSetStatement([.. param.Keys])} WHERE Id = @_id";
-        param.Add("_id", new NpgsqlParameter("_id", id));
-        return await ExecuteCommand(query, [.. param.Values], cancellationToken: cancellationToken);
+        var param = GetObjectAsNpgsqlParameter(entity);
+        return await Update(id: id, parameters: param, cancellationToken: cancellationToken);
     }
     
     /// <inheritdoc/>
     public async Task<int> Update(Guid id, List<GenericParameter> parameters, CancellationToken cancellationToken = default)
     {
-        string query = $"UPDATE {GetPostgresDefinition(includeAlias: false)} SET {UpdateSetStatement(parameters.Select(t => t.Key).ToList())} WHERE id = @_id";
-        var queryParameters = new List<NpgsqlParameter>();
-        if (parameters != null && parameters.Count > 0)
-        {
-            foreach (var p in parameters)
-            {
-                queryParameters.Add(new NpgsqlParameter(p.Key, p.Value));
-            }
-        }
-        queryParameters.Add(new NpgsqlParameter("_id", id));
-        return await ExecuteCommand(query, queryParameters, cancellationToken: cancellationToken);
+        var param = parameters.Select(t=> new NpgsqlParameter(t.Key, t.Value)).ToList();
+        return await Update(id: id, parameters: param, cancellationToken: cancellationToken);
+    }
+
+    private async Task<int> Update(Guid id, List<NpgsqlParameter> parameters, CancellationToken cancellationToken = default)
+    {
+        string query = $"UPDATE {GetPostgresDefinition(includeAlias: false)} SET {UpdateSetStatement(parameters)} WHERE id = @_id";
+        parameters.Add(new NpgsqlParameter("_id", id));
+        return await ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -238,14 +213,13 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         sb.AppendLine("SELECT ");
         sb.AppendLine(GenerateColumns(options));
         sb.AppendLine("FROM " + GenerateSource(options));
-        sb.AppendLine(GenerateStatementFromFilters(Definition.EntityType.Name, filters));
+        sb.AppendLine(GenerateStatementFromFilters(Definition.BaseType.Name, filters));
 
         var query = sb.ToString();
         query = AddPagingToQuery(query, options);
 
         return query;
     }
-
 
     /// <summary>
     /// Generate columns for query
@@ -266,11 +240,11 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         {
             if (useTranslation && Definition.HasTranslation && p.PropertyType == typeof(string))
             {
-                columns.Add($"coalesce(T_{Definition.EntityType.Name}.{p.Name},{Definition.EntityType.Name}.{p.Name}) AS {p.Name}");
+                columns.Add($"coalesce(T_{Definition.BaseType.Name}.{p.Name}, {Definition.BaseType.Name}.{p.Name}) AS {p.Name}");
             }
             else
             {
-                columns.Add($"{Definition.EntityType.Name}.{p.Name} AS {p.Name}");
+                columns.Add($"{Definition.BaseType.Name}.{p.Name} AS {p.Name}");
             }
         }
 
@@ -278,7 +252,7 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         {
             string orderBy = string.IsNullOrEmpty(options.OrderBy) ? "Id" : options.OrderBy;
             Definition.Columns.Exists(t=>t.Name.Equals(orderBy, StringComparison.CurrentCultureIgnoreCase));
-            columns.Add($"ROW_NUMBER() OVER (ORDER BY {Definition.EntityType.Name}.{orderBy}) AS _rownum");
+            columns.Add($"ROW_NUMBER() OVER (ORDER BY {Definition.BaseType.Name}.{orderBy}) AS _rownum");
         }
 
         return string.Join(',', columns);
@@ -315,7 +289,6 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         return conditions.Count > 0 ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
     }
 
-
     protected string AddPagingToQuery(string query, RequestOptions options)
     {
         if (!options.UsePaging)
@@ -351,7 +324,7 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
             return $"""
             {GetPostgresDefinition(includeAlias: true, useHistory: useHistory)}
             LEFT JOIN LATERAL (SELECT * FROM {GetPostgresDefinition(includeAlias: false, useTranslation: true, useHistory: useHistory)} AS T 
-            WHERE T.Id = {Definition.EntityType.Name}.Id AND T.Language = @Language) AS T_{Definition.EntityType.Name} ON 1=1
+            WHERE T.Id = {Definition.BaseType.Name}.Id AND T.Language = @Language) AS T_{Definition.BaseType.Name} ON 1=1
             """;
         }
         else
@@ -394,9 +367,6 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         return parameters;
     }
 
-
-
-
     public static NpgsqlDbType GetPostgresType(Type type)
     {
         if (type == typeof(string))
@@ -431,35 +401,38 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
 
     public string GetPostgresDefinition(bool includeAlias = true, bool useHistory = false, bool useTranslation = false)
     {
+        return GetPostgresDefinition(Definition, includeAlias, useHistory, useTranslation);
+    }
+    public string GetPostgresDefinition(DbDefinition dbDefinition, bool includeAlias = true, bool useHistory = false, bool useTranslation = false)
+    {
         // If Definition.Plantform == "Mssql" => Qualify names [..]
-
         string res = "";
         if (useHistory)
         {
             if (useTranslation)
             {
-                res = $"{Definition.TranslationHistorySchema}.{Definition.EntityType.Name}";
+                res = $"{dbDefinition.TranslationHistorySchema}.{dbDefinition.BaseType.Name}";
             }
             else
             {
-                res = $"{Definition.BaseHistorySchema}.{Definition.EntityType.Name}";
+                res = $"{dbDefinition.BaseHistorySchema}.{dbDefinition.BaseType.Name}";
             }
         }
         else
         {
             if (useTranslation)
             {
-                res = $"{Definition.TranslationSchema}.{Definition.EntityType.Name}";
+                res = $"{dbDefinition.TranslationSchema}.{dbDefinition.BaseType.Name}";
             }
             else
             {
-                res = $"{Definition.BaseSchema}.{Definition.EntityType.Name}";
+                res = $"{dbDefinition.BaseSchema}.{dbDefinition.BaseType.Name}";
             }
         }
 
         if (includeAlias)
         {
-            res += $" AS {Definition.EntityType.Name}";
+            res += $" AS {dbDefinition.BaseType.Name}";
         }
 
         return res;
@@ -482,7 +455,23 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
     }
 
     /// <summary>
-    /// Get translation filters
+    /// Generate filters based on object
+    /// </summary>
+    /// <param name="obj">Object</param>
+    /// <returns></returns>
+    protected List<NpgsqlParameter> GetObjectAsNpgsqlParameter(object obj)
+    {
+        var parameters = new List<NpgsqlParameter>();
+        foreach (PropertyInfo property in obj.GetType().GetProperties())
+        {
+            parameters.Add(new NpgsqlParameter(property.Name, property.GetValue(obj) ?? DBNull.Value));
+        }
+
+        return parameters;
+    }
+
+    /// <summary>
+    /// Definition translation filters
     /// Ignores non-string values
     /// </summary>
     /// <param name="obj">Translated object</param>
@@ -501,17 +490,29 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         return parameters;
     }
 
+    private string UpdateSetStatement(List<NpgsqlParameter> parameters)
+    {
+        return UpdateSetStatement(parameters.Select(t => t.ParameterName).ToList());
+    }
     private string UpdateSetStatement(List<string> values)
     {
         return string.Join(',', values.OrderBy(t => t).Select(t => $"{t} = @{t}").ToList());
     }
 
-    private string InsertColumns(List<string> values)
+    private string InsertColumns(List<NpgsqlParameter> values)
+    {
+        return InsertColumns(values.Select(t=>t.ParameterName));
+    }
+    private string InsertColumns(IEnumerable<string> values)
     {
         return string.Join(',', values.OrderBy(t => t).Select(t => $"{t}").ToList());
     }
 
-    private string InsertValues(List<string> values)
+    private string InsertValues(List<NpgsqlParameter> values)
+    {
+        return InsertValues(values.Select(t => t.ParameterName));
+    }
+    private string InsertValues(IEnumerable<string> values)
     {
         return string.Join(',', values.OrderBy(t => t).Select(t => $"@{t}").ToList());
     }
@@ -519,34 +520,12 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
 
     /*EXECUTE*/
 
-    private IDbConnection GetConnection()
-    {
-        if (connection != null)
-        {
-            return connection;
-        }
-        else if (!string.IsNullOrWhiteSpace(config.ConnectionString))
-        {
-            return new NpgsqlConnection(config.ConnectionString);
-        }
-        else
-        {
-            throw new InvalidOperationException("Neither an IDbConnection nor a valid connection string was provided.");
-        }
-    }
-
     private async Task<int> ExecuteCommand(string query, List<NpgsqlParameter> parameters, CancellationToken cancellationToken = default)
     {
         try
         {
-            using var conn = (NpgsqlConnection)GetConnection();
-            using var cmd = conn.CreateCommand();
+            await using var cmd = connection.CreateCommand(query);
             cmd.Parameters.AddRange(parameters.ToArray());
-            cmd.CommandText = query;
-            if (conn.State != ConnectionState.Open)
-            {
-                conn.Open();
-            }
             return await cmd.ExecuteNonQueryAsync(cancellationToken: cancellationToken);
         }
         catch (Exception ex)
@@ -566,10 +545,25 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
     {
         try
         {
-            using var conn = (NpgsqlConnection)GetConnection();
-            var cmd = new CommandDefinition(query, parameters, cancellationToken: cancellationToken);
-            await using var reader = await conn.ExecuteReaderAsync(cmd);
-            return dbConverter.ConvertToObjects<T>(reader);
+            await using var cmd = connection.CreateCommand(query);
+            if (parameters != null && parameters.Any())
+            {
+                foreach (var p in parameters)
+                {
+                    cmd.Parameters.Add(new NpgsqlParameter(p.Key, p.Value));
+                    //NpgsqlDbType? dbType; // Get from method...
+                    //if (dbType.HasValue)
+                    //{
+                    //    cmd.Parameters.AddWithValue(p.Key, dbType.Value, p.Value);
+                    //}
+                    //else
+                    //{
+                    //    cmd.Parameters.Add(new NpgsqlParameter(p.Key, p.Value));
+                    //}
+                }
+            }
+
+            return dbConverter.ConvertToObjects<T>(await cmd.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken));
         }
         catch (Exception ex)
         {

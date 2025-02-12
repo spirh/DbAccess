@@ -1,11 +1,13 @@
 ﻿namespace DbAccess.Models;
 
-public abstract class DbDefinition
+public class DbDefinition(Type type)
 {
-    public readonly List<ColumnDefinition> Columns = new();
-    public readonly List<ForeignKeyDefinition> ForeignKeys = new();
-    public readonly List<ConstraintDefinition> UniqueConstraints = new();
-    public readonly List<RelationDefinition> Relations = new();
+    public Type BaseType { get; set; } = type;
+
+    public List<ColumnDefinition> Columns = new();
+    public List<ForeignKeyDefinition> ForeignKeys = new();
+    public List<ConstraintDefinition> UniqueConstraints = new();
+    public List<RelationDefinition> Relations = new();
     public bool HasTranslation = false;
     public bool HasHistory = false;
 
