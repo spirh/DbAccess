@@ -3,6 +3,7 @@ using System.Text;
 using DbAccess.Contracts;
 using DbAccess.Helpers;
 using DbAccess.Models;
+using DbAccess.Services.Helpers;
 using Microsoft.Extensions.Options;
 using Npgsql;
 
@@ -63,7 +64,8 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         var parameterBuilder = new ParameterBuilder();
         var param = parameterBuilder.BuildFilterParameters(filters, options);
 
-        return await ExecuteQuery(query, param, cancellationToken: cancellationToken);
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteQuery<T>(query, param, cancellationToken: cancellationToken);
     }
     #endregion
 
@@ -84,7 +86,8 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         var queryBuilder = new SqlQueryBuilder(Definition);
         string query = queryBuilder.BuildInsertQuery(param);
 
-        return await ExecuteCommand(query, param, cancellationToken: cancellationToken);
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(query, param, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -97,7 +100,8 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         var queryBuilder = new SqlQueryBuilder(Definition);
         string query = queryBuilder.BuildUpsertQuery(param);
 
-        return await ExecuteCommand(sb.ToString(), param, cancellationToken: cancellationToken);
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(sb.ToString(), param, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -122,7 +126,9 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         string query = queryBuilder.BuildUpdateQuery(parameters);
 
         parameters.Add(new NpgsqlParameter("_id", id));
-        return await ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
+
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -130,7 +136,9 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
     {
         var queryBuilder = new SqlQueryBuilder(Definition);
         string query = queryBuilder.BuildDeleteQuery();
-        return await ExecuteCommand(query, [new NpgsqlParameter("_id", id)], cancellationToken: cancellationToken);
+
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(query, [new NpgsqlParameter("_id", id)], cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -148,7 +156,8 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
         var queryBuilder = new SqlQueryBuilder(Definition);
         string query = queryBuilder.BuildInsertQuery(parameters, forTranslation: true);
 
-        return await ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -167,52 +176,11 @@ public abstract class BasicRepository<T> : IDbBasicRepository<T>
 
         parameters.Add(new NpgsqlParameter("_language", language));
         parameters.Add(new NpgsqlParameter("_id", id));
-        return await ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
+
+        var dbExec = new DbExecutor(connection, dbConverter);
+        return await dbExec.ExecuteCommand(query, parameters, cancellationToken: cancellationToken);
     }
 
     #endregion
 
-    #region Execute
-    private async Task<int> ExecuteCommand(string query, List<NpgsqlParameter> parameters, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await using var cmd = connection.CreateCommand(query);
-            cmd.Parameters.AddRange(parameters.ToArray());
-            return await cmd.ExecuteNonQueryAsync(cancellationToken: cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-            Console.WriteLine(query);
-            foreach (NpgsqlParameter param in parameters)
-            {
-                Console.WriteLine($"{param.ParameterName}:{param.Value}");
-            }
-
-            throw;
-        }
-    }
-
-    private async Task<IEnumerable<T>> ExecuteQuery(string query, List<NpgsqlParameter> parameters, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await using var cmd = connection.CreateCommand(query);
-            cmd.Parameters.AddRange(parameters.ToArray());
-            return dbConverter.ConvertToObjects<T>(await cmd.ExecuteReaderAsync(CommandBehavior.SingleResult, cancellationToken));
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-            Console.WriteLine(query);
-            foreach (var param in parameters)
-            {
-                Console.WriteLine($"{param.ParameterName}:{param.Value}");
-            }
-            
-            throw;
-        }
-    }
-    #endregion
 }

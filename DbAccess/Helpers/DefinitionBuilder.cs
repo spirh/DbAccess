@@ -131,7 +131,7 @@ namespace DbAccess.Helpers
                 }
             }
 
-            var name = $"UC_{typeof(T).Name}_{string.Join("-", propertyNames)}";
+            var name = $"UC_{typeof(T).Name}_{string.Join("_", propertyNames)}";
 
             dbDefinition.UniqueConstraints.Add(new ConstraintDefinition()
             {

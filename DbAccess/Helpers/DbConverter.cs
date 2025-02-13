@@ -125,6 +125,13 @@ public sealed class DbConverter : IDbConverter
         (Member Member, Type? ElementType) prop,
         object value)
     {
+        if (prop.Member.Type == typeof(DateTimeOffset) && value is DateTime dt)
+        {
+            var dateTimeOffset = new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc));
+            accessor[instance, prop.Member.Name] = dateTimeOffset;
+            return;
+        }
+
         accessor[instance, prop.Member.Name] = Convert.ChangeType(value, prop.Member.Type);
     }
 

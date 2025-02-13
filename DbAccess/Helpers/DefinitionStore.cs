@@ -84,6 +84,18 @@ public static class DefinitionStore
     }
 
     /// <summary>
+    /// Attempts to retrieve the registered database definition for the specified type.
+    /// </summary>
+    /// <typeparam name="T">The entity type whose definition is requested.</typeparam>
+    /// <returns>
+    /// The corresponding <see cref="DbDefinition"/> if found; otherwise, <c>null</c>.
+    /// </returns>
+    public static DbDefinition? TryGetDefinition<T>()
+    {
+        return Store.ContainsKey(typeof(T)) ? Store[typeof(T)] : null;
+    }
+
+    /// <summary>
     /// Scans assemblies for types implementing <see cref="IDbDefinition"/> and registers their definitions.
     /// If a <paramref name="definitionNamespace"/> is provided, only definitions from the specified assembly are loaded.
     /// Otherwise, it scans all assemblies whose name starts with the executing assembly's name.

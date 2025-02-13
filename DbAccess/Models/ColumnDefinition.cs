@@ -10,3 +10,9 @@ public class ColumnDefinition
     public string? DefaultValue { get; set; }
     public int? Length { get; set; }
 }
+
+public class PKDefinition
+{
+    public List<PropertyInfo> Properties { get; set; }
+    public Dictionary<string, Type> SimpleProperties { get; set; }
+}

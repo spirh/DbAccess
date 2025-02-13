@@ -18,6 +18,11 @@ public class DbDefinition(Type type)
     public Type BaseType { get; set; } = type;
 
     /// <summary>
+    /// Gets or sets the collection of unique constraint definitions for the entity.
+    /// </summary>
+    public PKDefinition PrimaryKey { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the collection of column definitions for the entity.
     /// </summary>
     public List<ColumnDefinition> Columns { get; set; } = new();
