@@ -32,7 +32,9 @@ public class DbExecutor
         }
         catch
         {
+            Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine(query);
+            Console.ForegroundColor = ConsoleColor.White;
             throw;
         }
     }

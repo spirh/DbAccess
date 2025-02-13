@@ -28,10 +28,11 @@ if (app.Environment.IsDevelopment())
 
 var migrationService = app.Services.GetRequiredService<MigrationService>();
 await migrationService.Migrate<Provider>();
-await migrationService.Migrate<Package>();
 await migrationService.Migrate<Area>();
+await migrationService.Migrate<Package>();
 await migrationService.Migrate<Resource>();
 await migrationService.Migrate<PackageResource>();
+
 
 app.MapDbAccessEndpoints();
 

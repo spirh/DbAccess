@@ -130,7 +130,7 @@ public class SqlQueryBuilder(DbDefinition definition)
     /*Helpers*/
     private string GetPostgresDefinition(bool includeAlias = true, bool useHistory = false, bool useTranslation = false, bool useHistoryView = false)
     {
-        return GetPostgresDefinition(_definition, includeAlias, useHistory, useTranslation);
+        return GetPostgresDefinition(_definition, includeAlias, useHistory, useTranslation, useHistoryView);
     }
     private string GetPostgresDefinition(DbDefinition dbDefinition, bool includeAlias = true, bool useHistory = false, bool useTranslation = false, bool useHistoryView = false)
     {

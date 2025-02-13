@@ -16,6 +16,7 @@ public class PackageDefinition : IDbDefinition
             def.RegisterProperty(t => t.Id);
             def.RegisterProperty(t => t.Name, length: 150);
             def.RegisterProperty(t => t.Description);
+            def.RegisterProperty(t => t.AreaId);
             def.RegisterExtendedProperty<ExtPackage, Area>(t => t.AreaId, t => t.Id, t => t.Area);
             def.RegisterUniqueConstraint([t => t.Name, t => t.AreaId]);
         });

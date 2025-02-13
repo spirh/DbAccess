@@ -5,6 +5,7 @@ using DbAccess.Services.Helpers;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using System.Collections;
+using System.Net.Http.Headers;
 
 namespace DbAccess.Services;
 
@@ -15,6 +16,7 @@ public class MigrationService
     protected readonly IDbConverter dbConverter;
 
     private List<MigrationEntry> Migrations { get; set; } = new List<MigrationEntry>();
+    public Dictionary<Type, List<DictionaryEntry>> RetryQueue { get; set; } = new();
 
     public MigrationService(IOptions<DbAccessConfig> options, NpgsqlDataSource connection, IDbConverter dbConverter)
     {
@@ -107,6 +109,11 @@ public class MigrationService
         Console.WriteLine(key);
     }
 
+    public async Task RetryMigrate()
+    {
+
+    }
+
     /// <summary>
     /// Migrate Type
     /// </summary>
@@ -138,7 +145,11 @@ public class MigrationService
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Migration '{key}' failed: {ex.Message}");
-                    // Add to retry queue -> Dependencies
+                    if (!RetryQueue.ContainsKey(dbDefinition.BaseType))
+                    {
+                        RetryQueue.Add(dbDefinition.BaseType, new List<DictionaryEntry>());
+                    }
+                    RetryQueue[dbDefinition.BaseType].Add(script);
                 }
             }
         }
