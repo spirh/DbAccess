@@ -4,10 +4,11 @@ public class DbDefinition(Type type)
 {
     public Type BaseType { get; set; } = type;
 
-    public List<ColumnDefinition> Columns = new();
-    public List<ForeignKeyDefinition> ForeignKeys = new();
-    public List<ConstraintDefinition> UniqueConstraints = new();
-    public List<RelationDefinition> Relations = new();
+    public List<ColumnDefinition> Columns { get; set; } = new();
+    public List<ForeignKeyDefinition> ForeignKeys { get; set; } = new();
+    public List<ConstraintDefinition> UniqueConstraints { get; set; } = new();
+    public List<RelationDefinition> Relations { get; set; } = new();
+
     public bool HasTranslation = false;
     public bool HasHistory = false;
 

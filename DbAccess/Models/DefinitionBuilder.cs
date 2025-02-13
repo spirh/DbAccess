@@ -27,10 +27,10 @@ public sealed class DefinitionBuilder<T>
     {
         var columnDef = new ColumnDefinition()
         {
-            Name = ExtractPropertyInfo(column as Expression<Func<T, object>>).Name,
-            Property = ExtractPropertyInfo(column as Expression<Func<T, object>>),
+            Name = ExtractPropertyInfo(column).Name,
+            Property = ExtractPropertyInfo(column),
             DefaultValue = defaultValue,
-            IsNullabe = nullable,
+            IsNullable = nullable,
             Length = length
         };
         dbDefinition.Columns.Add(columnDef);
@@ -40,12 +40,13 @@ public sealed class DefinitionBuilder<T>
     public DefinitionBuilder<T> RegisterPrimaryKey(IEnumerable<Expression<Func<T, object?>>> properties)
     {
         var propertyNames = new List<string>();
+        var propertyInfos = typeof(T).GetProperties().ToList();
         foreach (var property in properties)
         {
             var propertyName = ExtractPropertyInfo(property as Expression<Func<T, object>>).Name;
             propertyNames.Add(propertyName);
 
-            if (!typeof(T).GetProperties().ToList().Exists(t => t.Name == propertyName))
+            if (!propertyInfos.Exists(t => t.Name == propertyName))
             {
                 throw new Exception($"{typeof(T).Name} does not contain the property '{propertyName}'");
             }
@@ -66,12 +67,13 @@ public sealed class DefinitionBuilder<T>
     public DefinitionBuilder<T> RegisterUniqueConstraint(IEnumerable<Expression<Func<T, object?>>> properties)
     {
         var propertyNames = new List<string>();
+        var propertyInfos = typeof(T).GetProperties().ToList();
         foreach (var property in properties)
         {
             var propertyName = ExtractPropertyInfo(property as Expression<Func<T, object>>).Name;
             propertyNames.Add(propertyName);
 
-            if (!typeof(T).GetProperties().ToList().Exists(t => t.Name == propertyName))
+            if (!propertyInfos.Exists(t => t.Name == propertyName))
             {
                 throw new Exception($"{typeof(T).Name} does not contain the property '{propertyName}'");
             }
@@ -102,9 +104,9 @@ public sealed class DefinitionBuilder<T>
 
       )
     {
-        string baseProperty = ExtractPropertyInfo(TProperty as Expression<Func<T, object>>).Name;
-        string refProperty = ExtractPropertyInfo(TJoinProperty as Expression<Func<TJoin, object>>).Name;
-        string extendedProperty = ExtractPropertyInfo(TExtendedProperty as Expression<Func<TExtended, object>>).Name;
+        string baseProperty = ExtractPropertyInfo(TProperty).Name;
+        string refProperty = ExtractPropertyInfo(TJoinProperty).Name;
+        string extendedProperty = ExtractPropertyInfo(TExtendedProperty).Name;
 
         var join = new ForeignKeyDefinition()
         {
@@ -125,9 +127,9 @@ public sealed class DefinitionBuilder<T>
 
     public DefinitionBuilder<T> RegisterRelation<TExtended, TJoin>(Expression<Func<T, object>> TProperty, Expression<Func<TJoin, object>> TJoinProperty, Expression<Func<TExtended, object>> TExtendedProperty)
     {
-        string baseProperty = ExtractPropertyInfo(TProperty as Expression<Func<T, object>>).Name;
-        string refProperty = ExtractPropertyInfo(TJoinProperty as Expression<Func<TJoin, object>>).Name;
-        string extendedProperty = ExtractPropertyInfo(TExtendedProperty as Expression<Func<TExtended, object>>).Name;
+        string baseProperty = ExtractPropertyInfo(TProperty).Name;
+        string refProperty = ExtractPropertyInfo(TJoinProperty).Name;
+        string extendedProperty = ExtractPropertyInfo(TExtendedProperty).Name;
 
         var relation = new RelationDefinition()
         {
@@ -178,12 +180,10 @@ public sealed class DefinitionBuilder<T>
 
         if (expression.Body is MemberExpression)
         {
-            // Hvis Body er direkte en MemberExpression, bruk den
             memberExpression = (MemberExpression)expression.Body;
         }
         else if (expression.Body is UnaryExpression unaryExpression && unaryExpression.Operand is MemberExpression)
         {
-            // Hvis Body er en UnaryExpression (f.eks. ved en typekonvertering), bruk Operand
             memberExpression = (MemberExpression)unaryExpression.Operand;
         }
         else
@@ -191,8 +191,7 @@ public sealed class DefinitionBuilder<T>
             throw new ArgumentException("Expression must refer to a property.");
         }
 
-        return memberExpression.Member as PropertyInfo
-            ?? throw new ArgumentException("Member is not a property.");
+        return memberExpression.Member as PropertyInfo ?? throw new ArgumentException("Member is not a property.");
     }
     #endregion
 }
