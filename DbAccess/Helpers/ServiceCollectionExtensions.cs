@@ -3,8 +3,23 @@ using System.Reflection;
 
 namespace DbAccess.Helpers;
 
+/// <summary>
+/// Provides extension methods for registering database-related services.
+/// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// Adds the database access services to the specified <see cref="IServiceCollection"/>,
+    /// scanning the given assembly for implementations and definitions required for database operations.
+    /// </summary>
+    /// <param name="services">The <see cref="IServiceCollection"/> to which the database services will be added.</param>
+    /// <param name="assemblyName">
+    /// The name of the assembly to scan for database service definitions and implementations.
+    /// This may include repositories, converters, and other database-related components.
+    /// </param>
+    /// <returns>
+    /// The updated <see cref="IServiceCollection"/> instance.
+    /// </returns>
     public static IServiceCollection AddDbServices(this IServiceCollection services, string assemblyName)
     {
         var targetAssembly = Assembly.Load(assemblyName);
