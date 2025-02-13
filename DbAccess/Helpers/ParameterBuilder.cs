@@ -2,7 +2,7 @@
 using DbAccess.Models;
 using Npgsql;
 
-namespace DbAccess.Services.Helpers
+namespace DbAccess.Helpers
 {
     /// <summary>
     /// Responsible for creating NpgsqlParameters from objects or filters.

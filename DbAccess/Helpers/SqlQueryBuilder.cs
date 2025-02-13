@@ -1,10 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Text;
-using DbAccess.Helpers;
 using DbAccess.Models;
 using Npgsql;
 
-namespace DbAccess.Services.Helpers
+namespace DbAccess.Helpers
 {
     /// <summary>
     /// Responsible for building SQL queries based on the DbDefinition, RequestOptions, and filters.
@@ -35,7 +34,7 @@ namespace DbAccess.Services.Helpers
             string query = sb.ToString();
             return AddPagingToQuery(query, options);
         }
-        
+
         /// <summary>
         /// Builds a SELECT query for extended types
         /// </summary>

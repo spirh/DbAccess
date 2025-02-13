@@ -1,4 +1,6 @@
-﻿namespace DbAccess.Models;
+﻿using DbAccess.Helpers;
+
+namespace DbAccess.Models;
 
 public class ForeignKeyDefinition
 {

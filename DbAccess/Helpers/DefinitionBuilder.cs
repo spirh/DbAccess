@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using DbAccess.Models;
 
-namespace DbAccess.Models
+namespace DbAccess.Helpers
 {
     /// <summary>
     /// Provides a fluent API for building a <see cref="DbDefinition"/> for the entity type <typeparamref name="T"/>.

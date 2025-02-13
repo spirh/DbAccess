@@ -1,4 +1,5 @@
-﻿using DbAccess.Models;
+﻿using DbAccess.Helpers;
+using DbAccess.Models;
 
 namespace DbAccess.Contracts;
 

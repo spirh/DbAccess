@@ -1,7 +1,7 @@
 ﻿using System.Linq.Expressions;
 using System.Reflection;
 
-namespace DbAccess.Models;
+namespace DbAccess.Helpers;
 
 /// <summary>
 /// Provides a fluent API for constructing a collection of <see cref="GenericFilter"/> objects based on expressions for the entity type <typeparamref name="T"/>.

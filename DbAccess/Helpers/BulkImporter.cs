@@ -4,7 +4,7 @@ using DbAccess.Models;
 using Npgsql;
 using NpgsqlTypes;
 
-namespace DbAccess.Services.Helpers
+namespace DbAccess.Helpers
 {
     /// <summary>
     /// Handles bulk importing of data using PostgreSQL's binary COPY.
@@ -81,14 +81,14 @@ namespace DbAccess.Services.Helpers
                 {
                     batchCompleted++;
                     completed = 0;
-                    Console.WriteLine($"Ingested {(batchCompleted * batchSize) + completed}");
+                    Console.WriteLine($"Ingested {batchCompleted * batchSize + completed}");
                 }
             }
 
-            Console.WriteLine($"Ingested {(batchCompleted * batchSize) + completed}");
+            Console.WriteLine($"Ingested {batchCompleted * batchSize + completed}");
             writer.Complete();
 
-            return (batchCompleted * batchSize) + completed;
+            return batchCompleted * batchSize + completed;
         }
 
         private string GetPostgresDefinition(bool includeAlias = true, bool useHistory = false, bool useTranslation = false)
